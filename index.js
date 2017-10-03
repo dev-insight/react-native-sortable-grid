@@ -19,53 +19,54 @@ const DOUBLETAP_TRESHOLD              = 150 // Milliseconds
 const NULL_FN                         = () => {}
 
 class Block extends Component {
-
-  render = () =>
+  render = () => {
+    return (
     <Animated.View
-      style = { this.props.style }
-      onLayout = { this.props.onLayout }
+      style={this.props.style}
+      onLayout={this.props.onLayout}
       {...this.props.panHandlers}
     >
       <TouchableWithoutFeedback
-        style          = {{ flex: 1 }}
-        delayLongPress = { this.props.delayLongPress }
-        onLongPress    = { this.props.onLongPress }
-        onPress        = { this.props.onPress }>
+        style={{flex: 1}}
+        delayLongPress={this.props.delayLongPress}
+        onLongPress={this.props.onLongPress}
+        onPress={this.props.onPress}>
 
-          <View style={styles.itemImageContainer}>
-            <View style={ this.props.itemWrapperStyle }>
-              {this.props.children}
-            </View>
-            { this.props.deletionView }
+        <View style={styles.itemImageContainer}>
+          <View style={this.props.itemWrapperStyle}>
+            {this.props.children}
           </View>
+          {this.props.deletionView}
+        </View>
 
       </TouchableWithoutFeedback>
     </Animated.View>
+    )
+  }
 
 }
 
 class SortableGrid extends Component {
-
     render = () =>
       <Animated.View
-        style={ this._getGridStyle() }
-        onLayout={ this.assessGridSize }
+        style={this._getGridStyle()}
+        onLayout={this.assessGridSize}
       >
-        { this.state.gridLayout &&
-          this.items.map( (item, key) =>
-            <Block
-              key = { key }
-              style = { this._getBlockStyle(key) }
-              onLayout = { this.saveBlockPositions(key) }
-              panHandlers = { this._panResponder.panHandlers }
-              delayLongPress = { this.dragActivationTreshold }
-              onLongPress = { this.activateDrag(key) }
-              onPress = { this.handleTap(item.props) }
-              itemWrapperStyle = { this._getItemWrapperStyle(key) }
-              deletionView = { this._getDeletionView(key) }
-            >
-              {item}
-            </Block>
+        {this.state.gridLayout &&
+        this.state.items.map((item, key) =>
+          <Block
+            key={key}
+            style={this._getBlockStyle(key)}
+            onLayout={this.saveBlockPositions(key)}
+            panHandlers={this._panResponder.panHandlers}
+            delayLongPress={this.dragActivationTreshold}
+            onLongPress={this.activateDrag(key)}
+            onPress={this.handleTap(item.props)}
+            itemWrapperStyle={this._getItemWrapperStyle(key)}
+            deletionView={this._getDeletionView(key)}
+          >
+            {item}
+          </Block>
         )}
       </Animated.View>
 
@@ -88,9 +89,7 @@ class SortableGrid extends Component {
     this.blockWidth        = null
     this.gridHeightTarget  = null
     this.ghostBlocks       = []
-    this.itemOrder         = []
     this.panCapture        = false
-    this.items             = []
     this.initialLayoutDone = false
     this.initialDragDone   = false
 
@@ -110,7 +109,9 @@ class SortableGrid extends Component {
       deletionSwipePercent: 0,
       deleteBlock: null,
       deleteBlockOpacity: new Animated.Value(1),
-      deletedItems: []
+      deletedItems: [],
+      items: [],
+      itemOrder: []
     }
   }
 
@@ -196,9 +197,16 @@ class SortableGrid extends Component {
         blockPositions[closest].origin = originalPosition
         this.setState({ blockPositions })
 
-        var tempOrderIndex = this.itemOrder[this.state.activeBlock].order
-        this.itemOrder[this.state.activeBlock].order = this.itemOrder[closest].order
-        this.itemOrder[closest].order = tempOrderIndex
+        var tempOrderIndex = this.state.itemOrder[this.state.activeBlock].order
+
+        const itemOrder = [...this.state.itemOrder]
+
+        itemOrder[this.state.activeBlock].order = this.state.itemOrder[closest].order
+        itemOrder[closest].order = tempOrderIndex
+
+        this.setState({
+          itemOrder
+        })
       }
     }
   }
@@ -217,7 +225,7 @@ class SortableGrid extends Component {
     .then( () => {
       let activeBlock = this.state.activeBlock
       this.setState({ activeBlock: null, deleteBlock: null }, () => {
-        this.onDeleteItem({ item: this.itemOrder[ activeBlock ] })
+        this.onDeleteItem({ item: this.state.itemOrder[ activeBlock ] })
         this.deleteBlocks([ activeBlock ])
         this.afterDragRelease()
       })
@@ -257,7 +265,7 @@ class SortableGrid extends Component {
   }
 
   afterDragRelease = () => {
-    let itemOrder = _.sortBy( this.itemOrder, item => item.order )
+    let itemOrder = _.sortBy( this.state.itemOrder, item => item.order )
     this.onDragRelease({ itemOrder })
     this.setState({ activeBlock: null })
     this.panCapture = false
@@ -286,19 +294,19 @@ class SortableGrid extends Component {
 
   reAssessGridRows = () => {
     let oldRows = this.rows
-    this.rows = Math.ceil(this.items.length / this.itemsPerRow)
+    this.rows = Math.ceil(this.state.items.length / this.itemsPerRow)
     if (this.state.blockWidth && oldRows != this.rows) this._animateGridHeight()
   }
 
   saveBlockPositions = (key) => ({nativeEvent}) => {
-    let blockPositions = this.state.blockPositions
+    const blockPositions = [...this.state.blockPositions]
     if (!blockPositions[key]) {
-      let blockPositionsSetCount = blockPositions[key] ? this.state.blockPositionsSetCount : ++this.state.blockPositionsSetCount
+      let blockPositionsSetCount = blockPositions[key] ? this.state.blockPositionsSetCount : (this.state.blockPositionsSetCount + 1)
       let thisPosition = {
         x: nativeEvent.layout.x,
         y: nativeEvent.layout.y
       }
-
+      
       blockPositions[key] = {
         currentPosition : new Animated.ValueXY( thisPosition ),
         origin          : thisPosition
@@ -314,8 +322,8 @@ class SortableGrid extends Component {
 
   getNextBlockCoordinates = () => {
     let blockWidth = this.state.blockWidth
-    let placeOnRow = this.items.length % this.itemsPerRow
-    let y = blockWidth * Math.floor(this.items.length / this.itemsPerRow)
+    let placeOnRow = this.state.items.length % this.itemsPerRow
+    let y = blockWidth * Math.floor(this.state.items.length / this.itemsPerRow)
     let x = placeOnRow * blockWidth
     return { x, y }
   }
@@ -325,7 +333,7 @@ class SortableGrid extends Component {
     this.reAssessGridRows()
     let blockWidth = this.state.blockWidth
     let fullGridItemCount = this.rows * this.itemsPerRow
-    let ghostBlockCount = fullGridItemCount - this.items.length
+    let ghostBlockCount = fullGridItemCount - this.state.items.length
     let y = blockWidth * (this.rows - 1)
     let initialX =  blockWidth * (this.itemsPerRow - ghostBlockCount)
 
@@ -337,7 +345,7 @@ class SortableGrid extends Component {
 
   activateDrag = (key) => () => {
     this.panCapture = true
-    this.onDragStart( this.itemOrder[key] )
+    this.onDragStart( this.state.itemOrder[key] )
     this.setState({ activeBlock: key })
     this._defaultDragActivationWiggle()
   }
@@ -355,40 +363,46 @@ class SortableGrid extends Component {
 
   _getBlock = (blockIndex) => this.state.blockPositions[ blockIndex ]
 
-  _blockPositionsSet = () => this.state.blockPositionsSetCount === this.items.length
+  _blockPositionsSet = () => this.state.blockPositionsSetCount === this.state.items.length
 
   _saveItemOrder = (items) => {
+    const _itemOrder = [...this.state.itemOrder]
+    const _items = [...this.state.items]
     items.forEach( (item, index) => {
-      const foundKey = _.findKey(this.itemOrder, oldItem => oldItem.key === item.key);
-
-      if (foundKey) {
-        this.items[foundKey] = item;
-      }
-      else {
-        this.itemOrder.push({ key: item.key, ref: item.ref, order: this.items.length });
+      const itemKey = _.findKey(this.state.itemOrder, (oldItem) => oldItem.order === item.props.rank)
+      if (!itemKey) {
+        _itemOrder.push({ key: item.key, ref: item.ref, order: item.props.rank })
         if (!this.initialLayoutDone) {
-          this.items.push(item);
+          _items[item.props.rank] = item
         }
         else {
-          let blockPositions = this.state.blockPositions
-          let blockPositionsSetCount = ++this.state.blockPositionsSetCount
+          let blockPositions = [...this.state.blockPositions]
+          let blockPositionsSetCount = this.state.blockPositionsSetCount + 1
           let thisPosition = this.getNextBlockCoordinates()
           blockPositions.push({
             currentPosition : new Animated.ValueXY( thisPosition ),
             origin          : thisPosition
           })
-          this.items.push(item)
+          _items.push(item)
           this.setState({ blockPositions, blockPositionsSetCount })
           this.setGhostPositions()
         }
+      } else {
+        _itemOrder[itemKey] = { key: item.key, ref: item.ref, order: item.props.rank }
+        _items[item.props.rank] = item;
       }
     })
+
+    this.setState({
+      itemOrder: _itemOrder,
+      items: _items
+    });
   }
 
   _removeDisappearedChildren = (items) => {
     let deleteBlockIndices = []
-    _.cloneDeep(this.itemOrder).forEach( (item, index) => {
-      if (!_.findKey(items, (oldItem) => oldItem.key === item.key)) {
+    this.state.itemOrder.forEach( (item, index) => {
+      if (!_.findKey(items, (oldItem) => oldItem.props.rank === item.order)) {
         deleteBlockIndices.push(index)
       }
     })
@@ -400,21 +414,31 @@ class SortableGrid extends Component {
   deleteBlocks = (deleteBlockIndices) => {
       let blockPositions = this.state.blockPositions
       let blockPositionsSetCount = this.state.blockPositionsSetCount
+      const itemOrder = [...this.state.itemOrder];
+      const items = [...this.state.items];
       _.sortBy(deleteBlockIndices, index => -index).forEach(index => {
         --blockPositionsSetCount
-        let order = this.itemOrder[index].order
+        let order = this.state.itemOrder[index].order
         blockPositions.splice(index, 1)
-        this._fixItemOrderOnDeletion(this.itemOrder[index])
-        this.itemOrder.splice(index, 1)
-        this.items.splice(index, 1)
+        this._fixItemOrderOnDeletion(this.state.itemOrder[index])
+        itemOrder.splice(index, 1)
+        items.splice(index, 1)
+        this.setState({
+          itemOrder,
+          items
+        })
       })
       this.setState({ blockPositions, blockPositionsSetCount }, () => {
-        this.items.forEach( (item, order) => {
-          let blockIndex = _.findIndex(this.itemOrder, item => item.order === order)
-          let x = (order * this.state.blockWidth) % (this.itemsPerRow * this.state.blockWidth)
-          let y = Math.floor(order / this.itemsPerRow) * this.state.blockWidth
-          this.state.blockPositions[blockIndex].origin = {x, y}
-          this.animateBlockMove(blockIndex, {x, y})
+        this.state.items.forEach( (item, order) => {
+          const blockPositions = [...this.state.blockPositions];
+          let blockIndex = _.findIndex(this.state.itemOrder, item => item.order === order)
+          if (blockIndex !== -1) {
+            let x = (order * this.state.blockWidth) % (this.itemsPerRow * this.state.blockWidth)
+            let y = Math.floor(order / this.itemsPerRow) * this.state.blockWidth
+            blockPositions[blockIndex].origin = {x, y}
+            this.animateBlockMove(blockIndex, {x, y})
+            this.setState({ blockPositions })
+          }
         })
         this.setGhostPositions()
       })
@@ -423,7 +447,7 @@ class SortableGrid extends Component {
   _fixItemOrderOnDeletion = (orderItem) => {
     if (!orderItem) return false
     orderItem.order--
-    this._fixItemOrderOnDeletion(_.find(this.itemOrder, item => item.order === orderItem.order + 2))
+    this._fixItemOrderOnDeletion(_.find(this.state.itemOrder, item => item.order === orderItem.order + 2))
   }
 
   _animateGridHeight = () => {
@@ -592,3 +616,4 @@ const styles = StyleSheet.create(
 })
 
 module.exports = SortableGrid
+
