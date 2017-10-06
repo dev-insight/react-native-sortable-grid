@@ -19,6 +19,11 @@ const DOUBLETAP_TRESHOLD              = 150 // Milliseconds
 const NULL_FN                         = () => {}
 
 class Block extends Component {
+  onLongPress = (event) => {
+    if (!this.props.lock) {
+      this.props.onLongPress(event);
+    }
+  }
   render = () => {
     return (
     <Animated.View
@@ -29,7 +34,7 @@ class Block extends Component {
       <TouchableWithoutFeedback
         style={{flex: 1}}
         delayLongPress={this.props.delayLongPress}
-        onLongPress={this.props.onLongPress}
+        onLongPress={this.onLongPress}
         onPress={this.props.onPress}>
 
         <View style={styles.itemImageContainer}>
@@ -64,6 +69,7 @@ class SortableGrid extends Component {
             onPress={this.handleTap(item.props)}
             itemWrapperStyle={this._getItemWrapperStyle(key)}
             deletionView={this._getDeletionView(key)}
+            lock={item.props.lock}
           >
             {item}
           </Block>
@@ -616,4 +622,5 @@ const styles = StyleSheet.create(
 })
 
 module.exports = SortableGrid
+
 
