@@ -103,6 +103,8 @@ class SortableGrid extends Component {
     this.tapIgnore         = false
     this.doubleTapWait     = false
 
+    this.itemOrder         = []
+
     this.state = {
       gridLayout: null,
       blockPositions: [],
@@ -117,7 +119,6 @@ class SortableGrid extends Component {
       deleteBlockOpacity: new Animated.Value(1),
       deletedItems: [],
       items: [],
-      itemOrder: []
     }
   }
 
@@ -198,20 +199,22 @@ class SortableGrid extends Component {
             duration: this.blockTransitionDuration
           }
         ).start()
-        let blockPositions = this.state.blockPositions
+        let blockPositions = this.state.blockPositions.slice(0)
         this._getActiveBlock().origin = blockPositions[closest].origin
-        blockPositions[closest].origin = originalPosition
-        this.setState({ blockPositions })
 
-        var tempOrderIndex = this.state.itemOrder[this.state.activeBlock].order
+        blockPositions[closest] = {
+          ...blockPositions[closest],
+          origin: originalPosition
+        }
 
-        const itemOrder = [...this.state.itemOrder]
+        var tempOrderIndex = this.itemOrder[this.state.activeBlock].order
 
-        itemOrder[this.state.activeBlock].order = this.state.itemOrder[closest].order
-        itemOrder[closest].order = tempOrderIndex
+
+        this.itemOrder[this.state.activeBlock].order = this.itemOrder[closest].order
+        this.itemOrder[closest].order = tempOrderIndex
 
         this.setState({
-          itemOrder
+          blockPositions
         })
       }
     }
@@ -231,7 +234,7 @@ class SortableGrid extends Component {
     .then( () => {
       let activeBlock = this.state.activeBlock
       this.setState({ activeBlock: null, deleteBlock: null }, () => {
-        this.onDeleteItem({ item: this.state.itemOrder[ activeBlock ] })
+        this.onDeleteItem({ item: this.itemOrder[ activeBlock ] })
         this.deleteBlocks([ activeBlock ])
         this.afterDragRelease()
       })
@@ -271,7 +274,7 @@ class SortableGrid extends Component {
   }
 
   afterDragRelease = () => {
-    let itemOrder = _.sortBy( this.state.itemOrder, item => item.order )
+    let itemOrder = _.sortBy( this.itemOrder, item => item.order )
     this.onDragRelease({ itemOrder })
     this.setState({ activeBlock: null })
     this.panCapture = false
@@ -351,7 +354,7 @@ class SortableGrid extends Component {
 
   activateDrag = (key) => () => {
     this.panCapture = true
-    this.onDragStart( this.state.itemOrder[key] )
+    this.onDragStart( this.itemOrder[key] )
     this.setState({ activeBlock: key })
     this._defaultDragActivationWiggle()
   }
@@ -372,17 +375,16 @@ class SortableGrid extends Component {
   _blockPositionsSet = () => this.state.blockPositionsSetCount === this.state.items.length
 
   _saveItemOrder = (items) => {
-    const _itemOrder = [...this.state.itemOrder]
-    const _items = [...this.state.items]
+    const _items = this.state.items.slice(0);
     items.forEach( (item, index) => {
-      const itemKey = _.findKey(this.state.itemOrder, (oldItem) => oldItem.order === item.props.rank)
+      const itemKey = _.findKey(this.itemOrder, (oldItem) => oldItem.order === item.props.rank)
       if (!itemKey) {
-        _itemOrder.push({ key: item.key, ref: item.ref, order: item.props.rank })
+        this.itemOrder.push({ key: item.key, ref: item.ref, order: item.props.rank })
         if (!this.initialLayoutDone) {
           _items[item.props.rank] = item
         }
         else {
-          let blockPositions = [...this.state.blockPositions]
+          let blockPositions = this.state.blockPositions.slice(0)
           let blockPositionsSetCount = this.state.blockPositionsSetCount + 1
           let thisPosition = this.getNextBlockCoordinates()
           blockPositions.push({
@@ -394,20 +396,19 @@ class SortableGrid extends Component {
           this.setGhostPositions()
         }
       } else {
-        _itemOrder[itemKey] = { key: item.key, ref: item.ref, order: item.props.rank }
-        _items[item.props.rank] = item;
+        this.itemOrder[itemKey] = { key: item.key, ref: item.ref, order: item.props.rank }
+        _items[itemKey] = item;
       }
     })
 
     this.setState({
-      itemOrder: _itemOrder,
       items: _items
     });
   }
 
   _removeDisappearedChildren = (items) => {
     let deleteBlockIndices = []
-    this.state.itemOrder.forEach( (item, index) => {
+    this.itemOrder.forEach( (item, index) => {
       if (!_.findKey(items, (oldItem) => oldItem.props.rank === item.order)) {
         deleteBlockIndices.push(index)
       }
@@ -420,24 +421,22 @@ class SortableGrid extends Component {
   deleteBlocks = (deleteBlockIndices) => {
       let blockPositions = this.state.blockPositions
       let blockPositionsSetCount = this.state.blockPositionsSetCount
-      const itemOrder = [...this.state.itemOrder];
       const items = [...this.state.items];
       _.sortBy(deleteBlockIndices, index => -index).forEach(index => {
         --blockPositionsSetCount
-        let order = this.state.itemOrder[index].order
+        let order = this.state[index].order
         blockPositions.splice(index, 1)
-        this._fixItemOrderOnDeletion(this.state.itemOrder[index])
-        itemOrder.splice(index, 1)
+        this._fixItemOrderOnDeletion(this.itemOrder[index])
+        this.itemOrder.splice(index, 1)
         items.splice(index, 1)
         this.setState({
-          itemOrder,
           items
         })
       })
       this.setState({ blockPositions, blockPositionsSetCount }, () => {
         this.state.items.forEach( (item, order) => {
           const blockPositions = [...this.state.blockPositions];
-          let blockIndex = _.findIndex(this.state.itemOrder, item => item.order === order)
+          let blockIndex = _.findIndex(this.itemOrder, item => item.order === order)
           if (blockIndex !== -1) {
             let x = (order * this.state.blockWidth) % (this.itemsPerRow * this.state.blockWidth)
             let y = Math.floor(order / this.itemsPerRow) * this.state.blockWidth
@@ -453,7 +452,7 @@ class SortableGrid extends Component {
   _fixItemOrderOnDeletion = (orderItem) => {
     if (!orderItem) return false
     orderItem.order--
-    this._fixItemOrderOnDeletion(_.find(this.state.itemOrder, item => item.order === orderItem.order + 2))
+    this._fixItemOrderOnDeletion(_.find(this.itemOrder, item => item.order === orderItem.order + 2))
   }
 
   _animateGridHeight = () => {
@@ -622,5 +621,6 @@ const styles = StyleSheet.create(
 })
 
 module.exports = SortableGrid
+
 
 
